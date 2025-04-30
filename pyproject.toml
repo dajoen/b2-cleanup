@@ -1,0 +1,15 @@
+[project]
+name = "b2-cleanup"
+version = "0.1.0"
+description = "Cleanup unfinished Backblaze B2 large uploads"
+authors = [
+    { name = "Jeroen Verhoeven", email = "jeroen@joentje.org" }
+]
+dependencies = [
+    "click>=8.0",
+    "b2sdk>=2.8.1"
+]
+
+[project.scripts]
+b2-cleanup = "cleanup_unfinished_b2_uploads:cli"
+
