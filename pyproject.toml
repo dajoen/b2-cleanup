@@ -1,15 +1,39 @@
 [project]
 name = "b2-cleanup"
 version = "0.1.0"
-description = "Cleanup unfinished Backblaze B2 large uploads"
+description = "CLI tool to clean up unfinished Backblaze B2 large uploads"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
 authors = [
     { name = "Jeroen Verhoeven", email = "jeroen@joentje.org" }
 ]
+keywords = ["backblaze", "b2", "cli", "cloud-storage", "cleanup"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Intended Audience :: Developers",
+    "Topic :: Utilities",
+]
+
 dependencies = [
     "click>=8.0",
-    "b2sdk>=2.8.1"
+    "b2sdk>=1.20.0"
 ]
+
+[project.urls]
+"Homepage" = "https://github.com/your-username/b2-cleanup"
+"Issues" = "https://github.com/your-username/b2-cleanup/issues"
 
 [project.scripts]
 b2-cleanup = "cleanup_unfinished_b2_uploads:cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
