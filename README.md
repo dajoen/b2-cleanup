@@ -77,9 +77,9 @@ This tool supports three ways to authenticate with B2, in priority order:
 
 3. **The `b2` CLI** (must be previously authorized):
    ```bash
-   b2 authorize-account
+   b2 account authorize
    # Then the tool will read credentials via:
-   b2 get account info
+   b2 account info
    ```
 
 ---
