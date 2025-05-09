@@ -1,8 +1,13 @@
-# b2-cleanup
+# B2 Cleanup
 
-🧹 A Python CLI tool to clean up **unfinished large file uploads** in a [Backblaze B2](https://www.backblaze.com/b2/cloud-storage.html) bucket.
+A CLI tool and Python library to clean up unfinished Backblaze B2 large file uploads.
 
-Built using [`b2sdk`](https://github.com/Backblaze/b2-sdk-python), [`click`](https://click.palletsprojects.com/), and [`uv`](https://github.com/astral-sh/uv) for performance and reproducibility.
+[![PyPI version](https://badge.fury.io/py/b2-cleanup.svg)](https://badge.fury.io/py/b2-cleanup)
+[![Python Versions](https://img.shields.io/pypi/pyversions/b2-cleanup.svg)](https://pypi.org/project/b2-cleanup/)
+
+## 📋 Overview
+
+When uploading large files to Backblaze B2, interrupted uploads can leave behind unfinished file parts that consume storage and incur costs. This tool helps you identify and clean up these unfinished uploads.
 
 ---
 
@@ -19,25 +24,27 @@ Built using [`b2sdk`](https://github.com/Backblaze/b2-sdk-python), [`click`](htt
 
 ## 🚀 Installation
 
-### 1. Clone and create an isolated environment
-
 ```bash
-git clone https://github.com/<your-username>/b2-cleanup.git
-cd b2-cleanup
-
-uv venv
-source .venv/bin/activate
-uv pip install -e .
+pip install b2-cleanup
 ```
-
-> Requires [uv](https://github.com/astral-sh/uv) and Python 3.8+
 
 ---
 
 ## 🧪 Usage
 
 ```bash
-b2-cleanup BUCKET_NAME [OPTIONS]
+# Basic usage (requires B2 CLI to be installed and authorized)
+b2-cleanup your-bucket-name
+```
+
+```bash
+# Use with explicit credentials
+b2-cleanup your-bucket-name --key-id YOUR_KEY_ID --key YOUR_APPLICATION_KEY
+```
+
+```bash
+# Dry run to preview what would be deleted
+b2-cleanup your-bucket-name --dry-run
 ```
 
 ### Example (dry run):
@@ -58,6 +65,25 @@ b2-cleanup my-bucket --log-file cleanup_$(date +%F).log
 b2-cleanup my-bucket --key-id my-key-id --key my-app-key
 ```
 
+### Example (Python usage):
+
+```python
+from b2_cleanup import B2CleanupTool
+
+# Using environment variables or B2 CLI for auth
+tool = B2CleanupTool(dry_run=True)
+
+# Using explicit credentials
+tool = B2CleanupTool(
+    dry_run=False,
+    override_key_id="your-key-id",
+    override_key="your-application-key"
+)
+
+# Clean up unfinished uploads
+tool.cleanup_unfinished_uploads("your-bucket-name")
+```
+
 ---
 
 ## 🔐 Authentication
@@ -66,20 +92,21 @@ This tool supports three ways to authenticate with B2, in priority order:
 
 1. **Explicit CLI arguments**:
    ```bash
-   b2-cleanup my-bucket --key-id abc123 --key supersecretkey
+   b2-cleanup bucket-name --key-id YOUR_KEY_ID --key YOUR_APPLICATION_KEY
    ```
 
 2. **Environment variables**:
    ```bash
    export B2_APPLICATION_KEY_ID=abc123
    export B2_APPLICATION_KEY=supersecretkey
+   b2-cleanup bucket-name
    ```
 
 3. **The `b2` CLI** (must be previously authorized):
    ```bash
    b2 account authorize
    # Then the tool will read credentials via:
-   b2 account info
+   b2 account get
    ```
 
 ---
@@ -88,8 +115,16 @@ This tool supports three ways to authenticate with B2, in priority order:
 
 ```
 b2-cleanup/
-├── cleanup_unfinished_b2_uploads.py   # Core CLI logic (class-based)
-├── pyproject.toml                     # Project metadata + dependencies
+├── b2_cleanup/
+│   ├── __init__.py     # Package exports
+│   ├── core.py         # Core functionality 
+│   └── cli.py          # CLI implementation
+├── tests/
+│   ├── __init__.py
+│   ├── test_core.py
+│   └── test_cli.py
+├── pyproject.toml      # Project metadata + dependencies
+├── CHANGELOG.md        # Version history
 ├── .gitignore
 └── README.md
 ```
@@ -101,8 +136,22 @@ b2-cleanup/
 - The CLI entry point is `b2-cleanup` via `pyproject.toml`
 - Install in editable mode (`uv pip install -e .`) for fast development
 - Dependencies are managed via [`uv`](https://github.com/astral-sh/uv)
+- Testing dependencies: `uv pip install -e ".[dev]"`
 
 ---
+
+## 🧪 Testing
+
+```bash
+# Install dev dependencies
+pip install b2-cleanup[dev]
+
+# Run tests
+pytest
+
+# With coverage
+pytest --cov=b2_cleanup
+```
 
 ## 🛠️ Roadmap
 
