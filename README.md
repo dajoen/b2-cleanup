@@ -74,7 +74,7 @@ $ b2-cleanup misspelled-bucket-name
 ✅ Authorized with B2 CLI credentials.
 ⚠️ Bucket 'misspelled-bucket-name' not found. Did you mean 'correct-bucket-name'?
 Use 'dajoen-backup-bucket' instead? [y/N]: y
-✅ Using bucket 'misspelled-bucket-name' instead
+✅ Using bucket 'correct-bucket-name' instead
 🗃️ Found 2 unfinished uploads
 🗑️ Cancelling file_id_123 (my-large-file.zip)
 🗑️ Cancelling file_id_456 (another-large-file.iso)
