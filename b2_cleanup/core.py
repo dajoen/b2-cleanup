@@ -1,18 +1,28 @@
+"""Core functionality for B2 cleanup tool."""
+
 import os
 import json
 import subprocess
 import logging
-import click
 from b2sdk.v2 import InMemoryAccountInfo, B2Api
 
 
 class B2CleanupTool:
+    """Tool to clean up unfinished large file uploads in B2 buckets."""
+
     def __init__(
         self,
         dry_run: bool = False,
         override_key_id: str = None,
         override_key: str = None,
     ):
+        """Initialize the B2 cleanup tool.
+
+        Args:
+            dry_run: If True, only list uploads but don't delete them
+            override_key_id: Optional B2 key ID to override env/config
+            override_key: Optional B2 application key to override env/config
+        """
         self.dry_run = dry_run
         self.logger = logging.getLogger("B2Cleanup")
         self.api = self._authorize(override_key_id, override_key)
@@ -36,12 +46,17 @@ class B2CleanupTool:
 
         try:
             self.logger.info("🔍 Trying to load credentials via `b2 account get`...")
-            result = subprocess.run(
-                ["b2", "account", "get"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+            try:
+                result = subprocess.run(
+                    ["b2", "account", "get"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except FileNotFoundError:
+                self.logger.error("❌ Command 'b2' not found. Please install the B2 CLI or provide credentials.")
+                raise RuntimeError("B2 CLI not found. Please install it or provide credentials manually.")
+                
             creds = json.loads(result.stdout)
             key_id = creds["applicationKeyId"]
             app_key = creds["applicationKey"]
@@ -56,6 +71,11 @@ class B2CleanupTool:
             raise RuntimeError("Could not authorize with Backblaze B2.")
 
     def cleanup_unfinished_uploads(self, bucket_name: str):
+        """Find and clean up unfinished uploads in the specified bucket.
+
+        Args:
+            bucket_name: Name of the B2 bucket to clean up
+        """
         bucket = self.api.get_bucket_by_name(bucket_name)
         unfinished = list(bucket.list_unfinished_large_files())
         if not unfinished:
@@ -64,43 +84,11 @@ class B2CleanupTool:
 
         self.logger.info("🗃️ Found %d unfinished uploads", len(unfinished))
         for file_version in unfinished:
-            file_id = file_version.id_
+            # Use the correct attribute names for UnfinishedLargeFile objects
+            file_id = file_version.file_id
             file_name = file_version.file_name
             if self.dry_run:
                 self.logger.info(f"💡 Dry run: would cancel {file_id} ({file_name})")
             else:
                 self.logger.info(f"🗑️ Cancelling {file_id} ({file_name})")
                 self.api.cancel_large_file(file_id)
-
-
-@click.command()
-@click.argument("bucket")
-@click.option(
-    "--dry-run", is_flag=True, help="Only list unfinished uploads, do not cancel."
-)
-@click.option("--log-file", default="b2_cleanup.log", help="Path to log file.")
-@click.option("--key-id", help="Backblaze B2 applicationKeyId to override env/config.")
-@click.option("--key", help="Backblaze B2 applicationKey to override env/config.")
-def cli(bucket, dry_run, log_file, key_id, key):
-    """Clean up unfinished large file uploads in BUCKET."""
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    if logger.hasHandlers():
-        logger.handlers.clear()
-
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-    )
-    logger.addHandler(file_handler)
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(stream_handler)
-
-    tool = B2CleanupTool(dry_run=dry_run, override_key_id=key_id, override_key=key)
-    tool.cleanup_unfinished_uploads(bucket)
-
-
-if __name__ == "__main__":
-    cli()
