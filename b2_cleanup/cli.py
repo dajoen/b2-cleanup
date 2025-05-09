@@ -21,7 +21,7 @@ def cli(bucket, dry_run, key_id, key, non_interactive):
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    file_handler = logging.FileHandler("b2_cleanup.log")
+    file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(
         logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     )
