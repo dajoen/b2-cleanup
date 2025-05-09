@@ -325,7 +325,11 @@ class TestB2CleanupTool:
             with pytest.raises(RuntimeError) as excinfo:
                 tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
         
-        assert "Operation canceled" in str(excinfo.value)
+        # Verify we get the expected error message with suggestions
+        assert "Cannot access bucket 'my-reel-bucket'" in str(excinfo.value)
+        assert "Did you mean one of these" in str(excinfo.value)
+        assert "my-real-bucket" in str(excinfo.value)
+        assert "my-other-bucket" in str(excinfo.value)
 
     @patch("b2_cleanup.core.B2Api")
     def test_fetch_empty_bucket_list(self, mock_b2api):
