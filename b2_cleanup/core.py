@@ -4,6 +4,7 @@ import os
 import json
 import subprocess
 import logging
+import difflib  # Add this import at the top
 from b2sdk.v2 import InMemoryAccountInfo, B2Api
 
 
@@ -26,6 +27,7 @@ class B2CleanupTool:
         self.dry_run = dry_run
         self.logger = logging.getLogger("B2Cleanup")
         self.api = self._authorize(override_key_id, override_key)
+        self.available_buckets = self._fetch_available_buckets()
 
     def _authorize(self, override_key_id=None, override_key=None):
         info = InMemoryAccountInfo()
@@ -70,13 +72,75 @@ class B2CleanupTool:
             )
             raise RuntimeError("Could not authorize with Backblaze B2.")
 
-    def cleanup_unfinished_uploads(self, bucket_name: str):
+    def _fetch_available_buckets(self):
+        """Fetch a list of available bucket names.
+        
+        Returns:
+            A list of bucket names the user has access to.
+        """
+        try:
+            self.logger.info("🔍 Fetching available buckets...")
+            buckets = self.api.list_buckets()
+            bucket_names = [b.name for b in buckets]
+            self.logger.info(f"✅ Found {len(bucket_names)} available buckets")
+            return bucket_names
+        except Exception as e:
+            self.logger.warning(f"⚠️ Could not fetch bucket list: {e}")
+            return []
+
+    def cleanup_unfinished_uploads(self, bucket_name: str, interactive: bool = True):
         """Find and clean up unfinished uploads in the specified bucket.
 
         Args:
             bucket_name: Name of the B2 bucket to clean up
+            interactive: If True, allow interactive correction of bucket names
         """
-        bucket = self.api.get_bucket_by_name(bucket_name)
+        try:
+            bucket = self.api.get_bucket_by_name(bucket_name)
+        except Exception as e:
+            # Generate suggestions from pre-fetched bucket list
+            suggestion_msg = ""
+            
+            # Only generate suggestions in interactive mode
+            if interactive and self.available_buckets:
+                # Find close matches using difflib
+                close_matches = difflib.get_close_matches(bucket_name, self.available_buckets, n=3, cutoff=0.6)
+                
+                if close_matches:
+                    if len(close_matches) == 1:
+                        suggestion_msg = f" Did you mean '{close_matches[0]}'?"
+                        # Interactive correction
+                        response = input(f"Use '{close_matches[0]}' instead? [y/N]: ").strip().lower()
+                        if response == 'y' or response == 'yes':
+                            self.logger.info(f"✅ Using bucket '{close_matches[0]}' instead")
+                            return self.cleanup_unfinished_uploads(close_matches[0], interactive=False)
+                    else:
+                        suggestions = "', '".join(close_matches)
+                        suggestion_msg = f" Did you mean one of these: '{suggestions}'?"
+                        # Interactive multi-choice
+                        self.logger.warning(f"⚠️ Bucket '{bucket_name}' not found. Did you mean one of these?")
+                        for i, match in enumerate(close_matches, 1):
+                            print(f"{i}. {match}")
+                        
+                        response = input("Enter number to use, or any other key to cancel: ").strip()
+                        try:
+                            idx = int(response) - 1
+                            if 0 <= idx < len(close_matches):
+                                suggested = close_matches[idx]
+                                self.logger.info(f"✅ Using bucket '{suggested}' instead")
+                                return self.cleanup_unfinished_uploads(suggested, interactive=False)
+                        except ValueError:
+                            pass  # Non-numeric input, just fall through to error
+            
+            # Show different messages depending on interactive mode
+            if interactive:
+                self.logger.error(f"❌ Bucket '{bucket_name}' not found or not accessible: {e}{suggestion_msg}")
+                raise RuntimeError(f"Cannot access bucket '{bucket_name}'.{suggestion_msg} Please check the name and your permissions.")
+            else:
+                # Simple error without suggestions in non-interactive mode
+                self.logger.error(f"❌ Bucket '{bucket_name}' not found or not accessible: {e}")
+                raise RuntimeError(f"Cannot access bucket '{bucket_name}'. Please check the name and your permissions.")
+
         unfinished = list(bucket.list_unfinished_large_files())
         if not unfinished:
             self.logger.info("✅ No unfinished large files found.")
@@ -84,7 +148,6 @@ class B2CleanupTool:
 
         self.logger.info("🗃️ Found %d unfinished uploads", len(unfinished))
         for file_version in unfinished:
-            # Use the correct attribute names for UnfinishedLargeFile objects
             file_id = file_version.file_id
             file_name = file_version.file_name
             if self.dry_run:

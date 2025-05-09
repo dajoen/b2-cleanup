@@ -6,21 +6,19 @@ from .core import B2CleanupTool
 
 
 @click.command()
-@click.argument("bucket")
-@click.option(
-    "--dry-run", is_flag=True, help="Only list unfinished uploads, do not cancel."
-)
-@click.option("--log-file", default="b2_cleanup.log", help="Path to log file.")
-@click.option("--key-id", help="Backblaze B2 applicationKeyId to override env/config.")
-@click.option("--key", help="Backblaze B2 applicationKey to override env/config.")
-def cli(bucket, dry_run, log_file, key_id, key):
-    """Clean up unfinished large file uploads in BUCKET."""
+@click.argument("bucket", required=True)
+@click.option("--dry-run", is_flag=True, help="List only, don't delete anything")
+@click.option("--key-id", help="B2 application key ID (overrides env vars)")
+@click.option("--key", help="B2 application key (overrides env vars)")
+@click.option("--non-interactive", is_flag=True, help="Disable interactive prompts")
+def cli(bucket, dry_run, key_id, key, non_interactive):
+    """Clean up unfinished B2 large file uploads in the specified bucket."""
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    file_handler = logging.FileHandler(log_file)
+    file_handler = logging.FileHandler("b2_cleanup.log")
     file_handler.setFormatter(
         logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     )
@@ -30,8 +28,13 @@ def cli(bucket, dry_run, log_file, key_id, key):
     stream_handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(stream_handler)
 
-    tool = B2CleanupTool(dry_run=dry_run, override_key_id=key_id, override_key=key)
-    tool.cleanup_unfinished_uploads(bucket)
+    tool = B2CleanupTool(
+        dry_run=dry_run,
+        override_key_id=key_id,
+        override_key=key,
+    )
+    
+    tool.cleanup_unfinished_uploads(bucket, interactive=not non_interactive)
 
 
 if __name__ == "__main__":

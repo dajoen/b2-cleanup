@@ -162,3 +162,61 @@ class TestB2CleanupTool:
             call("file1_id"),
             call("file2_id")
         ])
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_cleanup_nonexistent_bucket(self, mock_b2api):
+        """Test handling of a non-existent bucket."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Simulate bucket not found
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            tool.cleanup_unfinished_uploads("nonexistent-bucket")
+        
+        assert "Cannot access bucket" in str(excinfo.value)
+        mock_api.get_bucket_by_name.assert_called_once_with("nonexistent-bucket")
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_cleanup_suggests_similar_bucket_names(self, mock_b2api):
+        """Test that suggestions are provided for similar bucket names."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock available buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "my-real-bucket"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "my-other-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # Simulate bucket not found
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        # Check that when non-interactive, we get a simple error without suggestions
+        with pytest.raises(RuntimeError) as excinfo:
+            tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=False)
+        
+        assert "Cannot access bucket 'my-reel-bucket'" in str(excinfo.value)
+        assert "Did you mean" not in str(excinfo.value)  # Should not have suggestion
+        
+        # Reset the mock to test interactive mode
+        mock_api.get_bucket_by_name.reset_mock()
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        # For testing interactive mode, we need to patch input() function
+        with patch('builtins.input', return_value='n'):  # Simulate user answering "no"
+            with pytest.raises(RuntimeError) as excinfo:
+                tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+            
+            # Should include suggestion in error message when interactive=True
+            # Check for the presence of both buckets in the suggestion
+            error_msg = str(excinfo.value)
+            assert "Did you mean one of these" in error_msg
+            assert "my-real-bucket" in error_msg
+            assert "my-other-bucket" in error_msg
