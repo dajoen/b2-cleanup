@@ -220,3 +220,63 @@ class TestB2CleanupTool:
             assert "Did you mean one of these" in error_msg
             assert "my-real-bucket" in error_msg
             assert "my-other-bucket" in error_msg
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_single_suggestion_accepted(self, mock_b2api):
+        """Test accepting a single bucket name suggestion."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock a single bucket
+        mock_bucket = MagicMock()
+        mock_bucket.name = "my-real-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket]
+        
+        # First call fails, second call succeeds (after correction)
+        mock_api.get_bucket_by_name.side_effect = [
+            Exception("Bucket not found"),  # First call (with typo)
+            MagicMock()  # Second call (with corrected name)
+        ]
+        
+        # Mock the user accepting the suggestion
+        with patch('builtins.input', return_value='y'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+        
+        # Should have made 2 calls - first with the typo, then with the corrected name
+        assert mock_api.get_bucket_by_name.call_count == 2
+        mock_api.get_bucket_by_name.assert_has_calls([
+            call("my-reel-bucket"),
+            call("my-real-bucket")
+        ])
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_multiple_suggestion_selection(self, mock_b2api):
+        """Test selecting from multiple bucket name suggestions."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock multiple buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "my-real-bucket"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "my-other-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # First call fails, second call succeeds (after correction)
+        mock_api.get_bucket_by_name.side_effect = [
+            Exception("Bucket not found"),  # First call (with typo)
+            MagicMock()  # Second call (with selected name)
+        ]
+        
+        # Mock the user selecting option 2
+        with patch('builtins.input', return_value='2'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+        
+        # Should have made 2 calls - first with the typo, then with the selected name
+        assert mock_api.get_bucket_by_name.call_count == 2
+        mock_api.get_bucket_by_name.assert_has_calls([
+            call("my-reel-bucket"),
+            call("my-other-bucket")
+        ])
