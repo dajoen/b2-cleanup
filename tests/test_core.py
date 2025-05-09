@@ -80,6 +80,28 @@ class TestB2CleanupTool:
 
         assert "B2 CLI not found" in str(excinfo.value)
 
+    @patch("b2_cleanup.core.subprocess.run")
+    def test_b2_cli_command_error(self, mock_run):
+        """Test handling when B2 CLI command fails."""
+        mock_run.side_effect = subprocess.CalledProcessError(1, "b2 account get", "Error")
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            B2CleanupTool()
+        
+        assert "Could not authorize with Backblaze B2" in str(excinfo.value)
+
+    @patch("b2_cleanup.core.subprocess.run")
+    def test_b2_cli_invalid_json_response(self, mock_run):
+        """Test handling when B2 CLI returns invalid JSON."""
+        mock_result = MagicMock()
+        mock_result.stdout = "Not a JSON response"
+        mock_run.return_value = mock_result
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            B2CleanupTool()
+        
+        assert "Could not authorize with Backblaze B2" in str(excinfo.value)
+
     @patch("b2_cleanup.core.B2Api")
     def test_cleanup_unfinished_uploads_empty(self, mock_b2api):
         """Test cleanup when no unfinished uploads exist."""
