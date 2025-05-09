@@ -280,3 +280,27 @@ class TestB2CleanupTool:
             call("my-reel-bucket"),
             call("my-other-bucket")
         ])
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_invalid_selection(self, mock_b2api):
+        """Test invalid selection from bucket suggestions."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "my-real-bucket"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "my-other-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # Bucket not found
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        # Test with invalid selection (out of range or non-numeric)
+        with patch('builtins.input', return_value='99'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            with pytest.raises(RuntimeError) as excinfo:
+                tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+        
+        assert "Operation canceled" in str(excinfo.value)
