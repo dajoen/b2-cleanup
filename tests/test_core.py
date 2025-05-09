@@ -326,3 +326,17 @@ class TestB2CleanupTool:
                 tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
         
         assert "Operation canceled" in str(excinfo.value)
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_fetch_empty_bucket_list(self, mock_b2api):
+        """Test behavior when no buckets are available."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Return empty bucket list
+        mock_api.list_buckets.return_value = []
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        # Verify empty bucket list
+        assert tool.available_buckets == []
