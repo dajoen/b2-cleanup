@@ -358,3 +358,44 @@ class TestB2CleanupTool:
         
         # Should handle error gracefully and have empty bucket list
         assert tool.available_buckets == []
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_bucket_selection(self, mock_b2api):
+        """Test interactive bucket selection when no bucket name is provided."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock available buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "bucket-one"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "bucket-two"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # Mock successful bucket access after selection
+        mock_bucket = MagicMock()
+        mock_bucket.list_unfinished_large_files.return_value = []
+        mock_api.get_bucket_by_name.return_value = mock_bucket
+        
+        # Mock user selecting option 2
+        with patch('builtins.input', return_value='2'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            tool.cleanup_unfinished_uploads(bucket_name=None, interactive=True)
+        
+        # Should have selected the second bucket
+        mock_api.get_bucket_by_name.assert_called_once_with("bucket-two")
+        mock_bucket.list_unfinished_large_files.assert_called_once()
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_no_bucket_non_interactive(self, mock_b2api):
+        """Test error when no bucket name is provided in non-interactive mode."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            tool.cleanup_unfinished_uploads(bucket_name=None, interactive=False)
+        
+        assert "No bucket name provided" in str(excinfo.value)
+        mock_api.get_bucket_by_name.assert_not_called()

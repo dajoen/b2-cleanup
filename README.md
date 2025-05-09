@@ -80,6 +80,27 @@ Use 'dajoen-backup-bucket' instead? [y/N]: y
 🗑️ Cancelling file_id_456 (another-large-file.iso)
 ```
 
+### Example (interactive bucket selection):
+
+You can run the tool without specifying a bucket name to get an interactive selection menu:
+
+```bash
+$ b2-cleanup
+✅ Authorized with B2 CLI credentials.
+🔍 Fetching available buckets...
+✅ Found 3 available buckets
+📋 Please select a bucket to clean up:
+1. my-backup-bucket
+2. my-archive-bucket
+3. my-photos-bucket
+Enter the number of the bucket to clean up: 2
+✅ Selected bucket: 'my-archive-bucket'
+🗃️ Found 5 unfinished uploads
+🗑️ Cancelling file_id_123 (large-archive.zip)
+🗑️ Cancelling file_id_456 (backup-2025.tar.gz)
+...
+```
+
 ### Example (Python usage):
 
 ```python

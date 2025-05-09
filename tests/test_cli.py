@@ -81,9 +81,12 @@ class TestCLI:
         )
 
     def test_cli_missing_bucket(self):
-        """Test CLI with missing bucket argument."""
+        """Test CLI without bucket argument shows interactive selection."""
         runner = CliRunner()
-        result = runner.invoke(cli, [])
-
-        assert result.exit_code != 0
-        assert "Missing argument 'BUCKET'" in result.output
+        # Note: We set terminal_width to prevent output truncation in the test result
+        result = runner.invoke(cli, [], terminal_width=100)
+        
+        # Now the command should try to show bucket selection, not error
+        assert result.exit_code != 0  # Still non-zero because it gets aborted waiting for input
+        assert "Please select a bucket to clean up" in result.output
+        assert "Enter the number of the bucket to clean up" in result.output

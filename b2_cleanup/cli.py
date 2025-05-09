@@ -6,13 +6,16 @@ from .core import B2CleanupTool
 
 
 @click.command()
-@click.argument("bucket", required=True)
+@click.argument("bucket", required=False)
 @click.option("--dry-run", is_flag=True, help="List only, don't delete anything")
 @click.option("--key-id", help="B2 application key ID (overrides env vars)")
 @click.option("--key", help="B2 application key (overrides env vars)")
 @click.option("--non-interactive", is_flag=True, help="Disable interactive prompts")
 def cli(bucket, dry_run, key_id, key, non_interactive):
-    """Clean up unfinished B2 large file uploads in the specified bucket."""
+    """Clean up unfinished B2 large file uploads in the specified bucket.
+    
+    If no bucket is specified, you'll be prompted to select one from your available buckets.
+    """
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     if logger.hasHandlers():

@@ -88,13 +88,41 @@ class B2CleanupTool:
             self.logger.warning(f"⚠️ Could not fetch bucket list: {e}")
             return []
 
-    def cleanup_unfinished_uploads(self, bucket_name: str, interactive: bool = True):
+    def cleanup_unfinished_uploads(self, bucket_name: str = None, interactive: bool = True):
         """Find and clean up unfinished uploads in the specified bucket.
 
         Args:
-            bucket_name: Name of the B2 bucket to clean up
-            interactive: If True, allow interactive correction of bucket names
+            bucket_name: Name of the B2 bucket to clean up (or None to select interactively)
+            interactive: If True, allow interactive correction/selection of bucket names
         """
+        # If no bucket_name is provided, prompt user to select from available buckets
+        if bucket_name is None:
+            if not interactive:
+                self.logger.error("❌ No bucket name provided and interactive mode is disabled")
+                raise RuntimeError("No bucket name provided. Please specify a bucket name.")
+                
+            if not self.available_buckets:
+                self.logger.error("❌ No buckets available to select from")
+                raise RuntimeError("No buckets available. Please check your permissions.")
+                
+            self.logger.info("📋 Please select a bucket to clean up:")
+            for i, name in enumerate(self.available_buckets, 1):
+                print(f"{i}. {name}")
+                
+            try:
+                selection = input("Enter the number of the bucket to clean up: ").strip()
+                idx = int(selection) - 1
+                if 0 <= idx < len(self.available_buckets):
+                    bucket_name = self.available_buckets[idx]
+                    self.logger.info(f"✅ Selected bucket: '{bucket_name}'")
+                else:
+                    self.logger.error("❌ Invalid selection")
+                    raise RuntimeError("Invalid bucket selection. Please try again.")
+            except ValueError:
+                self.logger.error("❌ Invalid input")
+                raise RuntimeError("Invalid input. Please enter a number.")
+        
+        # Continue with the existing logic for accessing the bucket
         try:
             bucket = self.api.get_bucket_by_name(bucket_name)
         except Exception as e:
