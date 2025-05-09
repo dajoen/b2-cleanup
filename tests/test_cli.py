@@ -10,14 +10,17 @@ from b2_cleanup.cli import cli
 class TestCLI:
     """Test the CLI interface."""
 
+    @patch("b2_cleanup.cli.logging")
     @patch("b2_cleanup.cli.B2CleanupTool")
-    def test_cli_basic(self, mock_tool_class):
+    def test_cli_basic(self, mock_tool_class, mock_logging):
         """Test basic CLI functionality."""
         mock_tool = MagicMock()
         mock_tool_class.return_value = mock_tool
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["test-bucket"])
+        # Use a temporary log file path in tests
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["test-bucket", "--log-file", "test.log"])
 
         assert result.exit_code == 0
         mock_tool_class.assert_called_once_with(
