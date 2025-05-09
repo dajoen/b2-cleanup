@@ -67,7 +67,7 @@ b2-cleanup my-bucket --key-id my-key-id --key my-app-key
 
 ### Example (interactive bucket correction):
 
-If you mistype a bucket name, the tool wil suggest similar bucket names:
+If you mistype a bucket name, the tool will suggest similar bucket names:
 
 ```bash
 $ b2-cleanup misspelled-bucket-name
