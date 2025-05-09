@@ -17,6 +17,7 @@ When uploading large files to Backblaze B2, interrupted uploads can leave behind
 - Optionally cancels them (dry-run support included)
 - Uses the official `b2sdk` for native Backblaze API access
 - Supports authentication via env vars, CLI override, or the `b2` CLI
+- Smart bucket name suggestions with interactive correction
 - Clean CLI with logging support
 - Class-based and easily extensible
 
@@ -35,16 +36,15 @@ pip install b2-cleanup
 ```bash
 # Basic usage (requires B2 CLI to be installed and authorized)
 b2-cleanup your-bucket-name
-```
 
-```bash
 # Use with explicit credentials
 b2-cleanup your-bucket-name --key-id YOUR_KEY_ID --key YOUR_APPLICATION_KEY
-```
 
-```bash
 # Dry run to preview what would be deleted
 b2-cleanup your-bucket-name --dry-run
+
+# Disable interactive prompts (for scripts/automation)
+b2-cleanup your-bucket-name --non-interactive
 ```
 
 ### Example (dry run):
@@ -65,6 +65,42 @@ b2-cleanup my-bucket --log-file cleanup_$(date +%F).log
 b2-cleanup my-bucket --key-id my-key-id --key my-app-key
 ```
 
+### Example (interactive bucket correction):
+
+If you mistype a bucket name, the tool will suggest similar bucket names:
+
+```bash
+$ b2-cleanup misspelled-bucket-name
+✅ Authorized with B2 CLI credentials.
+⚠️ Bucket 'misspelled-bucket-name' not found. Did you mean 'correct-bucket-name'?
+Use 'dajoen-backup-bucket' instead? [y/N]: y
+✅ Using bucket 'correct-bucket-name' instead
+🗃️ Found 2 unfinished uploads
+🗑️ Cancelling file_id_123 (my-large-file.zip)
+🗑️ Cancelling file_id_456 (another-large-file.iso)
+```
+
+### Example (interactive bucket selection):
+
+You can run the tool without specifying a bucket name to get an interactive selection menu:
+
+```bash
+$ b2-cleanup
+✅ Authorized with B2 CLI credentials.
+🔍 Fetching available buckets...
+✅ Found 3 available buckets
+📋 Please select a bucket to clean up:
+1. my-backup-bucket
+2. my-archive-bucket
+3. my-photos-bucket
+Enter the number of the bucket to clean up: 2
+✅ Selected bucket: 'my-archive-bucket'
+🗃️ Found 5 unfinished uploads
+🗑️ Cancelling file_id_123 (large-archive.zip)
+🗑️ Cancelling file_id_456 (backup-2025.tar.gz)
+...
+```
+
 ### Example (Python usage):
 
 ```python
@@ -80,8 +116,11 @@ tool = B2CleanupTool(
     override_key="your-application-key"
 )
 
-# Clean up unfinished uploads
-tool.cleanup_unfinished_uploads("your-bucket-name")
+# Clean up unfinished uploads (with interactive mode)
+tool.cleanup_unfinished_uploads("your-bucket-name", interactive=True)
+
+# For scripts/automation (disable interactive prompts)
+tool.cleanup_unfinished_uploads("your-bucket-name", interactive=False)
 ```
 
 ---

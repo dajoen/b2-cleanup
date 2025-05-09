@@ -80,6 +80,28 @@ class TestB2CleanupTool:
 
         assert "B2 CLI not found" in str(excinfo.value)
 
+    @patch("b2_cleanup.core.subprocess.run")
+    def test_b2_cli_command_error(self, mock_run):
+        """Test handling when B2 CLI command fails."""
+        mock_run.side_effect = subprocess.CalledProcessError(1, "b2 account get", "Error")
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            B2CleanupTool()
+        
+        assert "Could not authorize with Backblaze B2" in str(excinfo.value)
+
+    @patch("b2_cleanup.core.subprocess.run")
+    def test_b2_cli_invalid_json_response(self, mock_run):
+        """Test handling when B2 CLI returns invalid JSON."""
+        mock_result = MagicMock()
+        mock_result.stdout = "Not a JSON response"
+        mock_run.return_value = mock_result
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            B2CleanupTool()
+        
+        assert "Could not authorize with Backblaze B2" in str(excinfo.value)
+
     @patch("b2_cleanup.core.B2Api")
     def test_cleanup_unfinished_uploads_empty(self, mock_b2api):
         """Test cleanup when no unfinished uploads exist."""
@@ -162,3 +184,218 @@ class TestB2CleanupTool:
             call("file1_id"),
             call("file2_id")
         ])
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_cleanup_nonexistent_bucket(self, mock_b2api):
+        """Test handling of a non-existent bucket."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Simulate bucket not found
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            tool.cleanup_unfinished_uploads("nonexistent-bucket")
+        
+        assert "Cannot access bucket" in str(excinfo.value)
+        mock_api.get_bucket_by_name.assert_called_once_with("nonexistent-bucket")
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_cleanup_suggests_similar_bucket_names(self, mock_b2api):
+        """Test that suggestions are provided for similar bucket names."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock available buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "my-real-bucket"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "my-other-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # Simulate bucket not found
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        # Check that when non-interactive, we get a simple error without suggestions
+        with pytest.raises(RuntimeError) as excinfo:
+            tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=False)
+        
+        assert "Cannot access bucket 'my-reel-bucket'" in str(excinfo.value)
+        assert "Did you mean" not in str(excinfo.value)  # Should not have suggestion
+        
+        # Reset the mock to test interactive mode
+        mock_api.get_bucket_by_name.reset_mock()
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        # For testing interactive mode, we need to patch input() function
+        with patch('builtins.input', return_value='n'):  # Simulate user answering "no"
+            with pytest.raises(RuntimeError) as excinfo:
+                tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+            
+            # Should include suggestion in error message when interactive=True
+            # Check for the presence of both buckets in the suggestion
+            error_msg = str(excinfo.value)
+            assert "Did you mean one of these" in error_msg
+            assert "my-real-bucket" in error_msg
+            assert "my-other-bucket" in error_msg
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_single_suggestion_accepted(self, mock_b2api):
+        """Test accepting a single bucket name suggestion."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock a single bucket
+        mock_bucket = MagicMock()
+        mock_bucket.name = "my-real-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket]
+        
+        # First call fails, second call succeeds (after correction)
+        mock_api.get_bucket_by_name.side_effect = [
+            Exception("Bucket not found"),  # First call (with typo)
+            MagicMock()  # Second call (with corrected name)
+        ]
+        
+        # Mock the user accepting the suggestion
+        with patch('builtins.input', return_value='y'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+        
+        # Should have made 2 calls - first with the typo, then with the corrected name
+        assert mock_api.get_bucket_by_name.call_count == 2
+        mock_api.get_bucket_by_name.assert_has_calls([
+            call("my-reel-bucket"),
+            call("my-real-bucket")
+        ])
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_multiple_suggestion_selection(self, mock_b2api):
+        """Test selecting from multiple bucket name suggestions."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock multiple buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "my-real-bucket"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "my-other-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # First call fails, second call succeeds (after correction)
+        mock_api.get_bucket_by_name.side_effect = [
+            Exception("Bucket not found"),  # First call (with typo)
+            MagicMock()  # Second call (with selected name)
+        ]
+        
+        # Mock the user selecting option 2
+        with patch('builtins.input', return_value='2'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+        
+        # Should have made 2 calls - first with the typo, then with the selected name
+        assert mock_api.get_bucket_by_name.call_count == 2
+        mock_api.get_bucket_by_name.assert_has_calls([
+            call("my-reel-bucket"),
+            call("my-other-bucket")
+        ])
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_invalid_selection(self, mock_b2api):
+        """Test invalid selection from bucket suggestions."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "my-real-bucket"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "my-other-bucket"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # Bucket not found
+        mock_api.get_bucket_by_name.side_effect = Exception("Bucket not found")
+        
+        # Test with invalid selection (out of range or non-numeric)
+        with patch('builtins.input', return_value='99'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            with pytest.raises(RuntimeError) as excinfo:
+                tool.cleanup_unfinished_uploads("my-reel-bucket", interactive=True)
+        
+        # Verify we get the expected error message with suggestions
+        assert "Cannot access bucket 'my-reel-bucket'" in str(excinfo.value)
+        assert "Did you mean one of these" in str(excinfo.value)
+        assert "my-real-bucket" in str(excinfo.value)
+        assert "my-other-bucket" in str(excinfo.value)
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_fetch_empty_bucket_list(self, mock_b2api):
+        """Test behavior when no buckets are available."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Return empty bucket list
+        mock_api.list_buckets.return_value = []
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        # Verify empty bucket list
+        assert tool.available_buckets == []
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_fetch_bucket_list_error(self, mock_b2api):
+        """Test graceful handling of bucket list fetch errors."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Simulate error fetching buckets
+        mock_api.list_buckets.side_effect = Exception("API error")
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        # Should handle error gracefully and have empty bucket list
+        assert tool.available_buckets == []
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_interactive_bucket_selection(self, mock_b2api):
+        """Test interactive bucket selection when no bucket name is provided."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Mock available buckets
+        mock_bucket1 = MagicMock()
+        mock_bucket1.name = "bucket-one"
+        mock_bucket2 = MagicMock()
+        mock_bucket2.name = "bucket-two"
+        mock_api.list_buckets.return_value = [mock_bucket1, mock_bucket2]
+        
+        # Mock successful bucket access after selection
+        mock_bucket = MagicMock()
+        mock_bucket.list_unfinished_large_files.return_value = []
+        mock_api.get_bucket_by_name.return_value = mock_bucket
+        
+        # Mock user selecting option 2
+        with patch('builtins.input', return_value='2'):
+            tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+            tool.cleanup_unfinished_uploads(bucket_name=None, interactive=True)
+        
+        # Should have selected the second bucket
+        mock_api.get_bucket_by_name.assert_called_once_with("bucket-two")
+        mock_bucket.list_unfinished_large_files.assert_called_once()
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_no_bucket_non_interactive(self, mock_b2api):
+        """Test error when no bucket name is provided in non-interactive mode."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            tool.cleanup_unfinished_uploads(bucket_name=None, interactive=False)
+        
+        assert "No bucket name provided" in str(excinfo.value)
+        mock_api.get_bucket_by_name.assert_not_called()
