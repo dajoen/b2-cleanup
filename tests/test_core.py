@@ -340,3 +340,17 @@ class TestB2CleanupTool:
         
         # Verify empty bucket list
         assert tool.available_buckets == []
+
+    @patch("b2_cleanup.core.B2Api")
+    def test_fetch_bucket_list_error(self, mock_b2api):
+        """Test graceful handling of bucket list fetch errors."""
+        mock_api = MagicMock()
+        mock_b2api.return_value = mock_api
+        
+        # Simulate error fetching buckets
+        mock_api.list_buckets.side_effect = Exception("API error")
+        
+        tool = B2CleanupTool(override_key_id="test_id", override_key="test_key")
+        
+        # Should handle error gracefully and have empty bucket list
+        assert tool.available_buckets == []
